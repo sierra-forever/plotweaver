@@ -42,22 +42,6 @@ python main.py
 On Windows you can also double-click `run.bat`. On Linux you can run `./run.sh`.
 Python 3.10 or newer is required.
 
-## Building
-
-Pushing a tag like `v0.4.0` (it must match `__version__` in `plotweaver/__init__.py`) makes
-GitHub Actions build all three downloads and publish them as a Release. You can also run the
-workflow by hand from the Actions tab to get the files without a release.
-
-To build on your own PC:
-* **Windows:** `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1`. This needs
-  [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer. The portable zip is built
-  without it.
-* **Linux:** `pip install pyinstaller && pyinstaller --noconfirm plotweaver.spec && packaging/linux/build_appimage.sh`
-
-To try it with example content, use **File → Open Sample Project**, or run
-`python make_sample.py "Sample Project"` and open that folder. The sample's content is in
-`plotweaver/sample.py`. The builds generate it from there, so it always matches the version.
-
 ## The project folder
 
 ```
