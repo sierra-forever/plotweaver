@@ -184,6 +184,8 @@ class Entity:
     mtime: float
     type: str
     broken: bool = False
+    parse_error: str = ""   # why the properties couldn't be read (when broken)
+    repaired: list = field(default_factory=list)  # lines quoted to make the properties readable
     parent: "Entity | None" = None
     children: list = field(default_factory=list)
     links: dict = field(default_factory=dict)  # lowercase target -> name as written
@@ -283,9 +285,9 @@ class Project:
 
     def _read(self, path: Path) -> Entity:
         text = path.read_text(encoding="utf-8", errors="replace")
-        meta, body, ok = mdio.parse(text)
-        return Entity(path, meta, body, path.stat().st_mtime, self._infer_type(path, meta),
-                      broken=not ok)
+        r = mdio.parse_ex(text)
+        return Entity(path, r.meta, r.body, path.stat().st_mtime, self._infer_type(path, r.meta),
+                      broken=not r.ok, parse_error=r.error, repaired=r.repaired)
 
     def _index_attachments(self):
         self.attachments = {}
@@ -816,13 +818,15 @@ class Project:
     # ---------------------------------------------------------------- editing
     def save(self, e: Entity, meta: dict | None = None, body: str | None = None):
         if e.broken:
-            raise ModelError("This note's properties couldn't be read, so it is read-only here.")
+            raise ModelError("This note's properties couldn't be read, so it is read-only here"
+                             + (f" ({e.parse_error})." if e.parse_error else "."))
         if meta is not None:
             e.meta = meta
         if body is not None:
             e.body = body
         _write(e.path, mdio.dump(e.meta, e.body))
         e.mtime = e.path.stat().st_mtime
+        e.repaired = []  # written back as valid YAML
         self._reindex()
 
     def _renumber(self, items: list[Entity]):

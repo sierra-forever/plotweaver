@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1
+
+- Properties written by hand with an unquoted `: ` inside a value (`note: Leading idea: she…`),
+  or a value starting with `*`, `@` or a backtick, no longer make the whole note read-only. Those
+  lines are read as plain text, a notice names them, and the next edit saves them with quotes.
+  Before, the note's properties were ignored, so a character's relationships, role and portrait
+  vanished from the views.
+- When a note's properties really can't be read, the notice now says which line and why.
+
 ## 0.5.0
 
 **Sample project**

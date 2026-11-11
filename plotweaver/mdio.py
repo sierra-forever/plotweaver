@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 import yaml
 
@@ -24,22 +25,82 @@ def _str_rep(dumper, data):
 _Dumper.add_representer(str, _str_rep)
 
 
-def parse(text: str):
-    """Return (meta, body, ok). ok is False when the frontmatter is not valid YAML;
-    in that case meta is empty and body is the whole text, so nothing is lost."""
-    text = text.lstrip("﻿")
+@dataclass
+class Parsed:
+    meta: dict
+    body: str
+    ok: bool = True        # False: the properties couldn't be read even after repairs
+    repaired: list = field(default_factory=list)  # file line numbers we quoted to make it parse
+    error: str = ""        # what went wrong, with the file line number
+
+
+# `key: value` (optionally a list item `- key: value`) where value is unquoted plain text
+_KV = re.compile(r"^(\s*(?:-\s+)?[^\s'\"#:\[\]{},][^:#]*?:[ \t]+)(\S.*?)\s*$")
+_NO_QUOTE = tuple("'\"[{|>")
+MAX_REPAIRS = 50
+
+
+def _quote_line(line: str) -> str | None:
+    """`note: Leading idea: she…` -> `note: 'Leading idea: she…'`. None if it can't help."""
+    m = _KV.match(line)
+    if not m or m.group(2).startswith(_NO_QUOTE):
+        return None
+    return m.group(1) + "'" + m.group(2).replace("'", "''") + "'"
+
+
+def _load(fm: str):
+    data = yaml.safe_load(fm)
+    return {} if data is None else data
+
+
+def parse_ex(text: str) -> Parsed:
+    """Split a note into its properties and body.
+
+    Hand-written properties often have an unquoted colon or a leading `*` or `@` in a value,
+    which isn't valid YAML. Rather than refusing the whole note, each line YAML complains
+    about is quoted as plain text and parsing is retried; `repaired` lists those lines. When
+    that doesn't help, ok is False, meta is empty and body is the whole text, so nothing is
+    lost."""
+    text = text.lstrip("\ufeff")
     m = _FM.match(text)
     if not m:
-        return {}, text, True
-    try:
-        data = yaml.safe_load(m.group(1))
-    except yaml.YAMLError:
-        return {}, text, False
-    if data is None:
-        data = {}
+        return Parsed({}, text)
+    fm, body = m.group(1), text[m.end():]
+    first_line = text[:m.start(1)].count("\n") + 1   # file line number of the block's first line
+    lines = fm.split("\n")
+    repaired = []
+    for _ in range(MAX_REPAIRS):
+        try:
+            data = _load("\n".join(lines))
+            break
+        except yaml.YAMLError as ex:
+            marks = [getattr(ex, "problem_mark", None), getattr(ex, "context_mark", None)]
+            fixed = False
+            for mk in marks:
+                if mk is None or not (0 <= mk.line < len(lines)):
+                    continue
+                q = _quote_line(lines[mk.line])
+                if q is not None and q != lines[mk.line]:
+                    lines[mk.line] = q
+                    repaired.append(first_line + mk.line)
+                    fixed = True
+                    break
+            if not fixed:
+                mk = marks[0] or marks[1]
+                where = f"line {first_line + mk.line}: " if mk is not None else ""
+                problem = getattr(ex, "problem", None) or str(ex).splitlines()[0]
+                return Parsed({}, text, ok=False, error=where + problem)
+    else:
+        return Parsed({}, text, ok=False, error="too many problems to repair")
     if not isinstance(data, dict):
-        return {}, text, False
-    return data, text[m.end():], True
+        return Parsed({}, text, ok=False, error="the properties block isn't a list of key: value lines")
+    return Parsed(data, body, repaired=sorted(set(repaired)))
+
+
+def parse(text: str):
+    """Return (meta, body, ok). See parse_ex."""
+    r = parse_ex(text)
+    return r.meta, r.body, r.ok
 
 
 def dump(meta: dict, body: str) -> str:

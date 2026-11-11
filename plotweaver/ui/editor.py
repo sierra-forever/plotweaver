@@ -292,12 +292,22 @@ class EntityEditor(QWidget):
         self.body.setReadOnly(e.broken)
         self.refresh_options()
         if e.broken:
+            where = f" ({e.parse_error})" if e.parse_error else ""
             self.banner.setText("This note's properties (the --- block at the top) aren't valid "
-                                "YAML, so it's shown read-only to avoid losing anything. Fix it in a "
-                                "text editor and it will reload automatically.")
+                                f"YAML{where}, so it's shown read-only to avoid losing anything. "
+                                "Fix it in a text editor and it will reload automatically.")
             self.banner.show()
             for w in self.fields.values():
                 w.setEnabled(False)
+        elif e.repaired:
+            lines = ", ".join(str(n) for n in e.repaired)
+            plural = "s" if len(e.repaired) > 1 else ""
+            self.banner.setText(f"Line{plural} {lines} of this note's properties had text YAML can't "
+                                "read unquoted (usually a “: ” inside a value), so Plotweaver read it "
+                                "as plain text. Check it looks right. It's written back with quotes "
+                                "the next time you change this note.")
+            self.banner.show()
+            self.portrait.setEnabled(True)
         else:
             self.banner.hide()
             self.portrait.setEnabled(True)

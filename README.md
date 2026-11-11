@@ -63,6 +63,9 @@ My Novel/
 * **Order lives in an `order:` property**, so reordering scenes never renames files or breaks links.
 * **Edit files anywhere.** Changes made in another editor, Obsidian, or git show up
   automatically. Unknown properties are kept and listed under *Other properties*.
+* **Hand-edited properties are forgiven where possible.** A value like `note: Idea: she…` isn't
+  valid YAML until it's quoted, so Plotweaver reads that line as plain text, shows a notice, and
+  saves it with quotes the next time you change the note.
 
 ## Using it
 
