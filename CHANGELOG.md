@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 **Daily word count**
 - Plotweaver logs how many words you write each day. When a linked draft is saved, the change in
