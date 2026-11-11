@@ -55,6 +55,7 @@ My Novel/
   images/                                  portraits and gallery images
   drafts/                                  suggested home for your prose files
   .trash/                                  deleted items go here, not to oblivion
+  .plotweaver/wordlog.json                 your daily word counts
 ```
 
 * **Names are file names.** `[[Sera Vale]]` links to `characters/Sera Vale.md`. Any
@@ -77,7 +78,7 @@ My Novel/
 | Rename | Edit the big title, or press `F2` |
 | Link | Type `[[` in the notes for name suggestions. `Ctrl+click` a link to follow it. |
 | Go to anything | `Ctrl+P` |
-| Editor / Corkboard / Matrix / Relationships | `Ctrl+1` / `Ctrl+2` / `Ctrl+3` / `Ctrl+4` |
+| Editor / Corkboard / Matrix / Relationships / Progress | `Ctrl+1` … `Ctrl+5` |
 | Filter by tag | `Ctrl+T` |
 | Open the scene's draft | `Ctrl+E` |
 
@@ -208,8 +209,32 @@ found, or otherwise the file's default app. You can set a specific command in
 
 *File → Import Drafts as Scenes…* turns a batch of existing draft files into scenes in one go.
 
+### Progress (`Ctrl+5`): daily word count
+
+Plotweaver keeps a daily word count from your linked drafts. It never sees you type, but every
+time a draft is saved, the change in its word count goes to the day the file was saved. The status
+bar shows today's count, and the **Progress** tab shows words per day and a running total for
+this month, the last 7/30/90 days, or all time. Set a **Daily goal** on the project note
+(1,667 for NaNoWriMo) to get a goal line, the pace you need, and a streak.
+
+How it counts:
+
+* **Net words.** Cutting 500 words gives a day a negative count, and moving text between scenes
+  doesn't add or remove anything.
+* **Newly linked drafts don't count.** Linking or importing a draft that already has words only
+  sets its starting point, and unlinking one doesn't subtract anything.
+* **A writing day starts at 4 a.m.**, so a late session stays one day. Change the hour in
+  *File → Preferences*.
+* **Exact while Plotweaver is open.** If it's closed while you write, the change is picked up next
+  time and goes to the day each draft was last saved. A draft you work on over several days while
+  Plotweaver stays closed counts all of it on the last of those days.
+* **Log words…** (or double-clicking a day) enters or corrects a day by hand, for days before
+  you started using it.
+
+The log is `.plotweaver/wordlog.json` in the project folder, so it moves and syncs with the novel.
+
 ## Roadmap
 
 * v2: love-interest arc stages (shown in the matrix)
-* v3: story timeline, heat/pacing curve, structure-beat templates, progress dashboard,
+* v3: story timeline, heat/pacing curve, structure-beat templates,
   compiled outline export

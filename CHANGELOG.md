@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+**Daily word count**
+- Plotweaver logs how many words you write each day. When a linked draft is saved, the change in
+  its word count goes to that day. Counts are net, a writing day starts at 4 a.m. (set in
+  Preferences), and newly linked or imported drafts only set a starting point.
+- If Plotweaver was closed, changes are picked up on the next open and go to the day each draft
+  was last modified.
+- The status bar shows today's words, and against a goal once the project note has a **Daily goal**.
+- New **Progress** tab (`Ctrl+5`): words per day with the goal line, and a running total against
+  goal pace. Ranges are this month, last 7/30/90 days, or all time. Shows daily average, streak,
+  best day and the per-day pace needed to finish the month.
+- **Log words…** or double-clicking a day enters or corrects a day by hand.
+- Stored in `.plotweaver/wordlog.json` inside the project.
+
 ## 0.5.1
 
 - Properties written by hand with an unquoted `: ` inside a value (`note: Leading idea: she…`),

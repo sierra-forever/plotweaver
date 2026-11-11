@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComp
                                QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QHeaderView,
                                QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QMenu, QMessageBox, QPushButton, QSplitter,
-                               QStackedWidget, QStyle, QTabWidget, QToolBar, QTreeWidget, QTreeWidgetItem,
+                               QSpinBox, QStackedWidget, QStyle, QTabWidget, QToolBar, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
 from .. import __version__
@@ -24,9 +24,11 @@ from ..model import (CHAPTER_NUM_RE, OUTLINE_TYPES, STATUSES, TYPE_LABELS, Entit
 from ..prose import PROSE_FILTER
 from ..sample import build_sample, is_older, sample_version
 from ..settings import app_settings, is_portable, sample_locations
+from ..wordlog import DEFAULT_DAY_START, WordLog, draft_counts
 from .editor import EntityEditor
 from .theme import THEMES, accent, apply_theme, current_theme
 from .graph import GraphView
+from .progress import ProgressView
 from .views import CorkboardView, MatrixView
 from .widgets import avatar, image_size, make_completer, status_icon
 
@@ -214,6 +216,13 @@ class Preferences(QDialog):
         hint.setWordWrap(True)
         hint.setTextFormat(Qt.RichText)
         form.addRow("", hint)
+        self.day_start = QSpinBox()
+        self.day_start.setRange(0, 12)
+        self.day_start.setSuffix(":00")
+        self.day_start.setValue(int(settings.value("day_start_hour", DEFAULT_DAY_START)))
+        self.day_start.setToolTip("Words written before this hour count toward the previous day, "
+                                  "so a late-night session stays one day.")
+        form.addRow("New writing day starts at", self.day_start)
         lay.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
@@ -227,6 +236,7 @@ class Preferences(QDialog):
 
     def accept(self):
         self.settings.setValue("editor_cmd", self.cmd.text().strip())
+        self.settings.setValue("day_start_hour", self.day_start.value())
         super().accept()
 
 
@@ -308,6 +318,10 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.cork, "Corkboard")
         self.tabs.addTab(self.matrix, "Matrix")
         self.tabs.addTab(self.graph, "Relationships")
+        self.wordlog: WordLog | None = None
+        self.progress = ProgressView(self.settings)
+        self.progress.changed.connect(self._update_stats)
+        self.tabs.addTab(self.progress, "Progress")
         self.tabs.currentChanged.connect(lambda *_: self._refresh_views())
 
         # ---------- linked mentions
@@ -379,6 +393,10 @@ class MainWindow(QMainWindow):
 
         self.stats_label = QLabel()
         self.statusBar().addPermanentWidget(self.stats_label)
+        # keep "Today" right when the app sits open across the start of a new day
+        self.day_timer = QTimer(self, interval=5 * 60 * 1000)
+        self.day_timer.timeout.connect(self._update_stats)
+        self.day_timer.start()
 
         self._build_actions()
         QApplication.instance().applicationStateChanged.connect(self._app_state)
@@ -412,7 +430,7 @@ class MainWindow(QMainWindow):
                                      icon=S.SP_DialogOpenButton)
         self.a_reveal = self._act("Show Project &Folder", self.reveal_folder)
         self.a_reload = self._act("&Reload from Disk", self.reload, "F5", icon=S.SP_BrowserReload)
-        self.a_prefs = self._act("&Preferences…", lambda: Preferences(self.settings, self).exec())
+        self.a_prefs = self._act("&Preferences…", self.preferences)
         self.a_quit = self._act("&Quit", self.close, "Ctrl+Q")
 
         self.a_part = self._act("New &Part", lambda: self.new_item("part"), tip="New part")
@@ -440,6 +458,8 @@ class MainWindow(QMainWindow):
         self.a_tab_cork = self._act("&Corkboard", lambda: self.tabs.setCurrentIndex(1), "Ctrl+2")
         self.a_tab_matrix = self._act("&Matrix", lambda: self.tabs.setCurrentIndex(2), "Ctrl+3")
         self.a_tab_graph = self._act("&Relationships", lambda: self.tabs.setCurrentIndex(3), "Ctrl+4")
+        self.a_tab_progress = self._act("&Progress", lambda: self.tabs.setCurrentIndex(4), "Ctrl+5",
+                                        tip="Words written per day")
         self.a_find_tag = self._act("Filter by &Tag…", self._focus_tag_filter, "Ctrl+T")
 
         mb = self.menuBar()
@@ -462,7 +482,8 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addActions([self.a_open_draft, self.a_goto])
         m = mb.addMenu("&View")
-        m.addActions([self.a_tab_editor, self.a_tab_cork, self.a_tab_matrix, self.a_tab_graph])
+        m.addActions([self.a_tab_editor, self.a_tab_cork, self.a_tab_matrix, self.a_tab_graph,
+                      self.a_tab_progress])
         m.addSeparator()
         tm = m.addMenu("T&heme")
         self.theme_group = QActionGroup(self)
@@ -504,7 +525,7 @@ class MainWindow(QMainWindow):
         for a in (self.a_reveal, self.a_reload, self.a_part, self.a_chapter, self.a_scene, self.a_char,
                   self.a_place, self.a_codex, self.a_note, self.a_up, self.a_down, self.a_rename,
                   self.a_delete, self.a_renumber, self.a_import, self.a_open_draft, self.a_goto, self.a_tab_editor,
-                  self.a_tab_cork, self.a_tab_matrix, self.a_tab_graph, self.a_find_tag, *self._project_tb):
+                  self.a_tab_cork, self.a_tab_matrix, self.a_tab_graph, self.a_tab_progress, self.a_find_tag, *self._project_tb):
             a.setEnabled(on)
         self.toolbar.setVisible(on)
 
@@ -597,6 +618,8 @@ class MainWindow(QMainWindow):
         self.cork.set_project(self.project)
         self.matrix.set_project(self.project)
         self.graph.set_project(self.project)
+        self.wordlog = WordLog(self.project.root, self._day_start())
+        self.progress.set_project(self.project, self.wordlog, self._daily_goal())
         self._first_build = True
         self.rebuild_tree()
         self._rewatch()
@@ -1481,10 +1504,52 @@ class MainWindow(QMainWindow):
         self._update_stats()
 
     # ================================================================ status
+    def preferences(self):
+        if Preferences(self.settings, self).exec() and self.wordlog:
+            self.wordlog.day_start_hour = self._day_start()
+            self._update_stats()
+            self._refresh_views()
+
+    def _day_start(self) -> int:
+        try:
+            return int(self.settings.value("day_start_hour", DEFAULT_DAY_START))
+        except (TypeError, ValueError):
+            return DEFAULT_DAY_START
+
+    def _daily_goal(self) -> int:
+        pe = self.project.project_entity if self.project else None
+        try:
+            return max(int(pe.meta.get("daily_goal") or 0), 0) if pe else 0
+        except (TypeError, ValueError):
+            return 0
+
+    def _track_words(self) -> str:
+        """Log draft changes for today's count; returns the status-bar text for today."""
+        log = self.wordlog
+        if not log:
+            return ""
+        changed = False
+        if not log.error:
+            counts, linked = draft_counts(self.project)
+            changed = log.sync(counts, linked)
+        goal = self._daily_goal()
+        if goal != self.progress.goal:
+            self.progress.set_goal(goal)
+            changed = True
+        if changed and self.tabs.currentWidget() is self.progress:
+            self.progress.refresh()
+        if log.error:
+            return "Today: word log unreadable"
+        t = log.words_on(log.today())
+        if goal:
+            return f"Today: {t:,} / {goal:,}" + (" ✓" if t >= goal else "")
+        return f"Today: {t:,} words"
+
     def _update_stats(self):
         if not self.project:
             self.stats_label.clear()
             return
+        today = self._track_words()
         s = self.project.stats()
         words = f"{s['words']:,}"
         if s["target"]:
@@ -1493,6 +1558,8 @@ class MainWindow(QMainWindow):
         else:
             words += " words"
         parts = [f"{s['chapters']} chapters", f"{s['scenes']} scenes", words]
+        if today:
+            parts.insert(0, today)
         by = s["status"]
         status_bits = [f"{by[k]} {k}" for k in STATUSES if by.get(k)]
         if status_bits:

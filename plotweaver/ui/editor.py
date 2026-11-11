@@ -19,6 +19,7 @@ CODEX_CATEGORIES = ["faction", "magic", "power", "item", "creature", "culture", 
 SCHEMAS = {
     "project": [("author", "Author", "text", None), ("series", "Series", "text", None),
                 ("genre", "Genre", "text", None), ("target_words", "Target words", "int", (0, 5_000_000, 1000)),
+                ("daily_goal", "Daily goal", "int", (0, 100_000, 100)),
                 ("deadline", "Deadline", "text", None), ("tags", "Tags", "list", "tags")],
     "part": [("status", "Status", "status", None), ("summary", "Summary", "text", None),
              ("tags", "Tags", "list", "tags")],
